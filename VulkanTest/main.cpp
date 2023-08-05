@@ -91,6 +91,8 @@ private:
 
 	void Cleanup()
 	{
+		vkDestroyInstance(instance, nullptr);
+
 		glfwDestroyWindow(window);
 		glfwTerminate();
 	}
