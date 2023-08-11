@@ -44,6 +44,11 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 struct QueueFamilyIndices
 {
 	std::optional<uint32_t> graphicsFamily;
+
+	bool IsComplete()
+	{
+		return graphicsFamily.has_value();
+	}
 };
 
 class HelloTriangleApplication
@@ -59,9 +64,12 @@ public:
 
 private:
 	// MEMBERS
-	GLFWwindow* window;
-	VkInstance instance;
-	VkDebugUtilsMessengerEXT debugMessenger;
+	GLFWwindow* window{};
+	VkInstance instance{};
+	VkDebugUtilsMessengerEXT debugMessenger{};
+	VkPhysicalDevice physicalDevice{ VK_NULL_HANDLE };
+	VkDevice device{};
+	VkQueue graphicsQueue{};
 
 	// STATIC METHODS
 	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
@@ -116,11 +124,53 @@ private:
 		{
 			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 		}
-
+		vkDestroyDevice(device, nullptr);
 		vkDestroyInstance(instance, nullptr);
 
 		glfwDestroyWindow(window);
 		glfwTerminate();
+	}
+
+	void CreateLogicalDevice()
+	{
+		QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
+
+		VkDeviceQueueCreateInfo queueCreateInfo{};
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+		queueCreateInfo.queueCount = 1;
+
+		float queuePriority = 1.0f;
+		queueCreateInfo.pQueuePriorities = &queuePriority;
+
+		VkPhysicalDeviceFeatures deviceFeatures{};
+
+		VkDeviceCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+		createInfo.pQueueCreateInfos = &queueCreateInfo;
+		createInfo.queueCreateInfoCount = 1;
+
+		createInfo.pEnabledFeatures = &deviceFeatures;
+
+		createInfo.enabledExtensionCount = 0;
+
+		if (enableValidationLayers) 
+		{
+			createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+			createInfo.ppEnabledLayerNames = validationLayers.data();
+		}
+		else
+		{
+			createInfo.enabledLayerCount = 0;
+		}
+
+		if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create Vulkan logical device!");
+		}
+
+		vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
 	}
 
 	void CreateInstance()
@@ -197,7 +247,10 @@ private:
 			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			{
 				indices.graphicsFamily = i;
-				break;
+				if (indices.IsComplete())
+				{
+					break;
+				}
 			}
 			++i;
 		}
@@ -226,6 +279,7 @@ private:
 		CreateInstance();
 		SetupDebugMessenger();
 		PickPhysicalDevice();
+		CreateLogicalDevice();
 	}
 
 	void InitWindow()
@@ -250,7 +304,7 @@ private:
 
 		QueueFamilyIndices indices = FindQueueFamilies(device);
 
-		return indices.graphicsFamily.has_value();
+		return indices.IsComplete();
 	}
 
 	void MainLoop()
@@ -263,8 +317,6 @@ private:
 
 	void PickPhysicalDevice()
 	{
-		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-
 		uint32_t deviceCount = 0;
 		vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
 
