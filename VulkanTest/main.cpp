@@ -1,9 +1,10 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include <iostream>
-#include <stdexcept>
 #include <cstdlib>
+#include <iostream>
+#include <optional>
+#include <stdexcept>
 #include <vector>
 
 const uint32_t WIDTH = 800;
@@ -39,6 +40,11 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 		func(instance, debugMessenger, pAllocator);
 	}
 }
+
+struct QueueFamilyIndices
+{
+	std::optional<uint32_t> graphicsFamily;
+};
 
 class HelloTriangleApplication
 {
@@ -175,6 +181,30 @@ private:
 		}
 	}
 
+	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
+	{
+		QueueFamilyIndices indices{};
+		
+		uint32_t queueFamilyCount = 0;
+		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+		std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+		int i = 0;
+		for (const auto& queueFamily : queueFamilies)
+		{
+			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+			{
+				indices.graphicsFamily = i;
+				break;
+			}
+			++i;
+		}
+
+		return indices;
+	}
+
 	std::vector<const char*> GetRequiredExtensions()
 	{
 		uint32_t glfwExtensionCount = 0;
@@ -210,12 +240,17 @@ private:
 
 	bool IsDeviceSuitable(VkPhysicalDevice device)
 	{
-		VkPhysicalDeviceProperties deviceProperties;
+		// This is an example, can use a scoringsystem too to find the best one.
+		/*VkPhysicalDeviceProperties deviceProperties;
 		VkPhysicalDeviceFeatures deviceFeatures;
 		vkGetPhysicalDeviceProperties(device, &deviceProperties);
 		vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
-		return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
+		return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;*/
+
+		QueueFamilyIndices indices = FindQueueFamilies(device);
+
+		return indices.graphicsFamily.has_value();
 	}
 
 	void MainLoop()
