@@ -13,6 +13,9 @@ constexpr uint32_t HEIGHT = 600;
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
 };
+const std::vector<const char*> deviceExtensions = {
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
 
 #ifdef NDEBUG
 constexpr bool enableValidationLayers = false;
@@ -90,6 +93,24 @@ private:
 	}
 
 	// METHODS
+	bool CheckDeviceExtensionSupport(VkPhysicalDevice device)
+	{
+		uint32_t extensionCount;
+		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+		std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+		std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+		for (const auto& extension : availableExtensions)
+		{
+			requiredExtensions.erase(extension.extensionName);
+		}
+
+		return requiredExtensions.empty();
+	}
+
 	static bool CheckValidationLayerSupport()
 	{
 		uint32_t layerCount;
@@ -321,7 +342,7 @@ private:
 		m_window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 	}
 
-	static bool IsDeviceSuitable(VkPhysicalDevice device)
+	bool IsDeviceSuitable(VkPhysicalDevice device)
 	{
 		// This is an example, can use a scoringsystem too to find the best one.
 		/*VkPhysicalDeviceProperties deviceProperties;
@@ -331,9 +352,9 @@ private:
 
 		return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;*/
 
-		QueueFamilyIndices indices = FindQueueFamilies(device);
+		const QueueFamilyIndices indices = FindQueueFamilies(device);
 
-		return indices.IsComplete();
+		return indices.IsComplete() && CheckDeviceExtensionSupport(device);
 	}
 
 	void MainLoop() const
