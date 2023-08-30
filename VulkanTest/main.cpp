@@ -148,6 +148,18 @@ private:
 		return true;
 	}
 
+	static VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+	{
+		for (const auto& presentMode : availablePresentModes)
+		{
+			if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+			{
+				return presentMode;
+			}
+		}
+		return VK_PRESENT_MODE_FIFO_KHR;
+	}
+
 	static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
 	{
 		for (const auto& format : availableFormats)
