@@ -148,6 +148,19 @@ private:
 		return true;
 	}
 
+	static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+	{
+		for (const auto& format : availableFormats)
+		{
+			if (format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+			{
+				return format;
+			}
+		}
+
+		return availableFormats[0];
+	}
+
 	void Cleanup() const
 	{
 		if (enableValidationLayers)
@@ -365,7 +378,7 @@ private:
 		bool swapChainAdequate = false;
 		if (CheckDeviceExtensionSupport(device))
 		{
-			SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device);
+			const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device);
 			swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
 		}
 
