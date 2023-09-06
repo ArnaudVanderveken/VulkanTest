@@ -12,12 +12,12 @@
 #include <vector>
 
 
-constexpr uint32_t WIDTH = 800;
-constexpr uint32_t HEIGHT = 600;
-const std::vector<const char*> validationLayers = {
+constexpr uint32_t G_WIDTH = 800;
+constexpr uint32_t G_HEIGHT = 600;
+const std::vector<const char*> G_VALIDATION_LAYERS = {
 	"VK_LAYER_KHRONOS_validation"
 };
-const std::vector<const char*> deviceExtensions = {
+const std::vector<const char*> G_DEVICE_EXTENSIONS = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
@@ -87,6 +87,9 @@ private:
 	VkSurfaceKHR m_surface{};
 	VkQueue m_presentQueue{};
 	VkSwapchainKHR m_swapChain{};
+	std::vector<VkImage> m_swapChainImages{};
+	VkFormat m_swapChainImageFormat{};
+	VkExtent2D m_swapChainExtent{};
 
 	// STATIC METHODS
 	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
@@ -113,7 +116,7 @@ private:
 		std::vector<VkExtensionProperties> availableExtensions(extensionCount);
 		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
 
-		std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+		std::set<std::string> requiredExtensions(G_DEVICE_EXTENSIONS.begin(), G_DEVICE_EXTENSIONS.end());
 
 		for (const auto& extension : availableExtensions)
 		{
@@ -131,7 +134,7 @@ private:
 		std::vector<VkLayerProperties> availableLayers(layerCount);
 		vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-		for (const char* layerName : validationLayers)
+		for (const char* layerName : G_VALIDATION_LAYERS)
 		{
 			bool layerFound{};
 
@@ -242,13 +245,13 @@ private:
 
 		createInfo.pEnabledFeatures = &deviceFeatures;
 
-		createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
-		createInfo.ppEnabledExtensionNames = deviceExtensions.data();
+		createInfo.enabledExtensionCount = static_cast<uint32_t>(G_DEVICE_EXTENSIONS.size());
+		createInfo.ppEnabledExtensionNames = G_DEVICE_EXTENSIONS.data();
 
 		if (enableValidationLayers) 
 		{
-			createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-			createInfo.ppEnabledLayerNames = validationLayers.data();
+			createInfo.enabledLayerCount = static_cast<uint32_t>(G_VALIDATION_LAYERS.size());
+			createInfo.ppEnabledLayerNames = G_VALIDATION_LAYERS.data();
 		}
 		else
 		{
@@ -291,8 +294,8 @@ private:
 
 		if (enableValidationLayers)
 		{
-			createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-			createInfo.ppEnabledLayerNames = validationLayers.data();
+			createInfo.enabledLayerCount = static_cast<uint32_t>(G_VALIDATION_LAYERS.size());
+			createInfo.ppEnabledLayerNames = G_VALIDATION_LAYERS.data();
 
 			PopulateDebugMessengerCreateInfo(debugCreateInfo);
 			createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
@@ -380,6 +383,13 @@ private:
 		{
 			throw std::runtime_error("Failed to create swap chain!");
 		}
+
+		vkGetSwapchainImagesKHR(m_device, m_swapChain, &imageCount, nullptr);
+		m_swapChainImages.resize(imageCount);
+		vkGetSwapchainImagesKHR(m_device, m_swapChain, &imageCount, m_swapChainImages.data());
+
+		m_swapChainImageFormat = surfaceFormat.format;
+		m_swapChainExtent = extent;
 	}
 
 	QueueFamilyIndices FindQueueFamilies(const VkPhysicalDevice& device) const
@@ -452,7 +462,7 @@ private:
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-		m_window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+		m_window = glfwCreateWindow(G_WIDTH, G_HEIGHT, "Vulkan", nullptr, nullptr);
 	}
 
 	bool IsDeviceSuitable(VkPhysicalDevice device)
