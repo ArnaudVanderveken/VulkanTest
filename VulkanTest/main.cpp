@@ -92,7 +92,7 @@ private:
 	VkExtent2D m_swapChainExtent{};
 	std::vector<VkImageView> m_swapChainImageViews{};
 
-	// STATIC METHODS
+	// DEBUG CALLBACK
 	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 		VkDebugUtilsMessageTypeFlagsEXT /*messageType*/,
@@ -101,7 +101,7 @@ private:
 	{
 		if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 		{
-			std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+			std::cerr << "Validation layer: " << pCallbackData->pMessage << std::endl;
 		}
 		
 
@@ -220,6 +220,11 @@ private:
 
 		glfwDestroyWindow(m_window);
 		glfwTerminate();
+	}
+
+	void CreateGraphicsPipeline()
+	{
+
 	}
 
 	void CreateImageViews()
@@ -490,6 +495,7 @@ private:
 		CreateLogicalDevice();
 		CreateSwapChain();
 		CreateImageViews();
+		CreateGraphicsPipeline();
 	}
 
 	void InitWindow()
