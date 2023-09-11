@@ -92,6 +92,7 @@ private:
 	VkFormat m_swapChainImageFormat{};
 	VkExtent2D m_swapChainExtent{};
 	std::vector<VkImageView> m_swapChainImageViews{};
+	VkPipelineLayout m_pipelineLayout{};
 
 	// DEBUG CALLBACK
 	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
@@ -206,6 +207,7 @@ private:
 
 	void Cleanup() const
 	{
+		vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 		for (const auto imageView : m_swapChainImageViews)
 		{
 			vkDestroyImageView(m_device, imageView, nullptr);
@@ -325,6 +327,18 @@ private:
 		colorBlending.blendConstants[1] = 0.0f; // Optional
 		colorBlending.blendConstants[2] = 0.0f; // Optional
 		colorBlending.blendConstants[3] = 0.0f; // Optional
+
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipelineLayoutInfo.setLayoutCount = 0; // Optional
+		pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+
+		if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create pipeline layout!");
+		}
 
 		vkDestroyShaderModule(m_device, fragShaderModule, nullptr);
 		vkDestroyShaderModule(m_device, vertShaderModule, nullptr);
