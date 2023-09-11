@@ -95,6 +95,7 @@ private:
 	VkRenderPass m_renderPass{};
 	VkPipelineLayout m_pipelineLayout{};
 	VkPipeline m_graphicsPipeline{};
+	std::vector<VkFramebuffer> m_swapChainFramebuffers{};
 
 
 	// DEBUG CALLBACK
@@ -228,6 +229,11 @@ private:
 
 		glfwDestroyWindow(m_window);
 		glfwTerminate();
+	}
+
+	void CreateFramebuffers()
+	{
+
 	}
 
 	void CreateGraphicsPipeline()
@@ -414,6 +420,64 @@ private:
 		}
 	}
 
+	void CreateInstance()
+	{
+		if (enableValidationLayers && !CheckValidationLayerSupport())
+		{
+			throw std::runtime_error("Validation layers requested, but not available!");
+		}
+
+		VkApplicationInfo appInfo{};
+		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+		appInfo.pApplicationName = "Hello Triangle";
+		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+		appInfo.pEngineName = "No Engine";
+		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+		appInfo.apiVersion = VK_API_VERSION_1_0;
+
+		VkInstanceCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+		createInfo.pApplicationInfo = &appInfo;
+
+		const auto extensions = GetRequiredExtensions();
+		createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+		createInfo.ppEnabledExtensionNames = extensions.data();
+
+		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+
+		if (enableValidationLayers)
+		{
+			createInfo.enabledLayerCount = static_cast<uint32_t>(G_VALIDATION_LAYERS.size());
+			createInfo.ppEnabledLayerNames = G_VALIDATION_LAYERS.data();
+
+			PopulateDebugMessengerCreateInfo(debugCreateInfo);
+			createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+		}
+		else
+		{
+			createInfo.enabledLayerCount = 0;
+			createInfo.pNext = nullptr;
+		}
+
+		/* ENUMERATE AVAILABLE EXTENSIONS
+		uint32_t extensionCount = 0;
+		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+		std::vector<VkExtensionProperties> extensionProperties(extensionCount);
+		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensionProperties.data());
+
+		std::cout << "available extensions:\n";
+		for (const auto& extension : extensionProperties)
+		{
+			std::cout << '\t' << extension.extensionName << '\n';
+		}
+		std::cout << std::endl; */
+
+		if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create Vulkan instance!");
+		}
+	}
+
 	void CreateLogicalDevice()
 	{
 		QueueFamilyIndices indices = FindQueueFamilies(m_physicalDevice);
@@ -462,64 +526,6 @@ private:
 
 		vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);  // NOLINT(bugprone-unchecked-optional-access) will throw before if not set
 		vkGetDeviceQueue(m_device, indices.presentFamily.value(), 0, &m_presentQueue);
-	}
-
-	void CreateInstance()
-	{
-		if (enableValidationLayers && !CheckValidationLayerSupport())
-		{
-			throw std::runtime_error("Validation layers requested, but not available!");
-		}
-
-		VkApplicationInfo appInfo{};
-		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		appInfo.pApplicationName = "Hello Triangle";
-		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.pEngineName = "No Engine";
-		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.apiVersion = VK_API_VERSION_1_0;
-
-		VkInstanceCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-		createInfo.pApplicationInfo = &appInfo;
-
-		const auto extensions = GetRequiredExtensions();
-		createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-		createInfo.ppEnabledExtensionNames = extensions.data();
-		
-		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-
-		if (enableValidationLayers)
-		{
-			createInfo.enabledLayerCount = static_cast<uint32_t>(G_VALIDATION_LAYERS.size());
-			createInfo.ppEnabledLayerNames = G_VALIDATION_LAYERS.data();
-
-			PopulateDebugMessengerCreateInfo(debugCreateInfo);
-			createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
-		}
-		else
-		{
-			createInfo.enabledLayerCount = 0;
-			createInfo.pNext = nullptr;
-		}
-
-		/* ENUMERATE AVAILABLE EXTENSIONS
-		uint32_t extensionCount = 0;
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-		std::vector<VkExtensionProperties> extensionProperties(extensionCount);
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensionProperties.data());
-
-		std::cout << "available extensions:\n";
-		for (const auto& extension : extensionProperties)
-		{
-			std::cout << '\t' << extension.extensionName << '\n';
-		}
-		std::cout << std::endl; */
-
-		if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS)
-		{
-			throw std::runtime_error("Failed to create Vulkan instance!");
-		}
 	}
 
 	void CreateRenderPass()
@@ -703,6 +709,7 @@ private:
 		CreateImageViews();
 		CreateRenderPass();
 		CreateGraphicsPipeline();
+		CreateFramebuffers();
 	}
 
 	void InitWindow()
