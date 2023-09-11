@@ -96,6 +96,7 @@ private:
 	VkPipelineLayout m_pipelineLayout{};
 	VkPipeline m_graphicsPipeline{};
 	std::vector<VkFramebuffer> m_swapChainFramebuffers{};
+	VkCommandPool m_commandPool{};
 
 
 	// DEBUG CALLBACK
@@ -211,7 +212,8 @@ private:
 
 	void Cleanup() const
 	{
-		for (auto framebuffer : m_swapChainFramebuffers)
+		vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+		for (const auto framebuffer : m_swapChainFramebuffers)
 		{
 			vkDestroyFramebuffer(m_device, framebuffer, nullptr);
 		}
@@ -235,13 +237,28 @@ private:
 		glfwTerminate();
 	}
 
+	void CreateCommandPool()
+	{
+		const QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_physicalDevice);
+
+		VkCommandPoolCreateInfo poolInfo{};
+		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+
+		if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create command pool!");
+		}
+	}
+
 	void CreateFramebuffers()
 	{
 		m_swapChainFramebuffers.resize(m_swapChainImageViews.size());
 
 		for (size_t i = 0; i < m_swapChainImageViews.size(); i++)
 		{
-			VkImageView attachments[] = {
+			const VkImageView attachments[] = {
 				m_swapChainImageViews[i]
 			};
 
@@ -735,6 +752,7 @@ private:
 		CreateRenderPass();
 		CreateGraphicsPipeline();
 		CreateFramebuffers();
+		CreateCommandPool();
 	}
 
 	void InitWindow()
