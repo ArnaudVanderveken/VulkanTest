@@ -104,9 +104,10 @@ private:
 	std::vector<VkSemaphore> m_renderFinishedSemaphores{};
 	std::vector<VkFence> m_inFlightFences{};
 	uint32_t m_currentFrame{};
+	bool m_framebufferResized{};
 
 
-	// DEBUG CALLBACK
+	// CALLBACKS
 	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 		VkDebugUtilsMessageTypeFlagsEXT /*messageType*/,
@@ -120,6 +121,12 @@ private:
 		
 
 		return VK_FALSE;
+	}
+
+	static void FramebufferResizeCallback(GLFWwindow* window, int /*width*/, int /*height*/)
+	{
+		const auto app = static_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+		app->m_framebufferResized = true;
 	}
 
 	// METHODS
@@ -219,35 +226,48 @@ private:
 
 	void Cleanup() const
 	{
-		for (size_t i = 0; i < G_MAX_FRAMES_IN_FLIGHT; ++i)
-		{
+		CleanupSwapChain();
+
+		vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
+		vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+
+		vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+
+		for (size_t i = 0; i < G_MAX_FRAMES_IN_FLIGHT; ++i) {
 			vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
 			vkDestroySemaphore(m_device, m_imageAvailableSemaphores[i], nullptr);
 			vkDestroyFence(m_device, m_inFlightFences[i], nullptr);
 		}
+
 		vkDestroyCommandPool(m_device, m_commandPool, nullptr);
-		for (const auto framebuffer : m_swapChainFramebuffers)
-		{
-			vkDestroyFramebuffer(m_device, framebuffer, nullptr);
-		}
-		vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
-		vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
-		vkDestroyRenderPass(m_device, m_renderPass, nullptr);
-		for (const auto imageView : m_swapChainImageViews)
-		{
-			vkDestroyImageView(m_device, imageView, nullptr);
-		}
-		vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
-		if (enableValidationLayers)
-		{
+
+		vkDestroyDevice(m_device, nullptr);
+
+		if (enableValidationLayers) {
 			DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
 		}
-		vkDestroyDevice(m_device, nullptr);
+
 		vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
 		vkDestroyInstance(m_instance, nullptr);
 
 		glfwDestroyWindow(m_window);
+
 		glfwTerminate();
+	}
+
+	void CleanupSwapChain() const
+	{
+		for (auto& swapChainFramebuffer : m_swapChainFramebuffers)
+		{
+			vkDestroyFramebuffer(m_device, swapChainFramebuffer, nullptr);
+		}
+
+		for (auto& swapChainImageView : m_swapChainImageViews)
+		{
+			vkDestroyImageView(m_device, swapChainImageView, nullptr);
+		}
+
+		vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
 	}
 
 	void CreateCommandBuffers()
@@ -329,7 +349,7 @@ private:
 
 		VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
-		/*std::vector<VkDynamicState> dynamicStates = {
+		std::vector<VkDynamicState> dynamicStates = {
 			VK_DYNAMIC_STATE_VIEWPORT,
 			VK_DYNAMIC_STATE_SCISSOR
 		};
@@ -337,7 +357,7 @@ private:
 		VkPipelineDynamicStateCreateInfo dynamicState{};
 		dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 		dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-		dynamicState.pDynamicStates = dynamicStates.data();*/
+		dynamicState.pDynamicStates = dynamicStates.data();
 
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -443,8 +463,7 @@ private:
 		pipelineInfo.pMultisampleState = &multisampling;
 		pipelineInfo.pDepthStencilState = nullptr; // Optional
 		pipelineInfo.pColorBlendState = &colorBlending;
-		//pipelineInfo.pDynamicState = &dynamicState;
-		pipelineInfo.pDynamicState = nullptr;
+		pipelineInfo.pDynamicState = &dynamicState;
 		pipelineInfo.layout = m_pipelineLayout;
 		pipelineInfo.renderPass = m_renderPass;
 		pipelineInfo.subpass = 0;
@@ -671,9 +690,9 @@ private:
 	{
 		const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(m_physicalDevice);
 
-		VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.formats);
-		VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.presentModes);
-		VkExtent2D extent = ChooseSwapExtent(swapChainSupport.capabilities);
+		const VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.formats);
+		const VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.presentModes);
+		const VkExtent2D extent = ChooseSwapExtent(swapChainSupport.capabilities);
 
 		uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
 		if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
@@ -753,10 +772,22 @@ private:
 	void DrawFrame()
 	{
 		vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
-		vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
 
 		uint32_t imageIndex;
-		vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+		VkResult result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+		if (result == VK_ERROR_OUT_OF_DATE_KHR)
+		{
+			RecreateSwapChain();
+			return;
+		}
+		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+		{
+			throw std::runtime_error("Failed to acquire swap chain image!");
+		}
+
+		// Only reset the fence if we are submitting work
+		vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
 
 		vkResetCommandBuffer(m_commandBuffers[m_currentFrame], 0);
 
@@ -792,7 +823,17 @@ private:
 		presentInfo.pImageIndices = &imageIndex;
 		presentInfo.pResults = nullptr; // Optional
 
-		vkQueuePresentKHR(m_presentQueue, &presentInfo);
+		result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+
+		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_framebufferResized)
+		{
+			m_framebufferResized = false;
+			RecreateSwapChain();
+		}
+		else if (result != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to present swap chain image!");
+		}
 
 		m_currentFrame = (m_currentFrame + 1) % G_MAX_FRAMES_IN_FLIGHT;
 	}
@@ -872,9 +913,10 @@ private:
 		glfwInit();
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 		m_window = glfwCreateWindow(G_WIDTH, G_HEIGHT, "Vulkan", nullptr, nullptr);
+		glfwSetWindowUserPointer(m_window, this);
+		glfwSetFramebufferSizeCallback(m_window, FramebufferResizeCallback);
 	}
 
 	bool IsDeviceSuitable(VkPhysicalDevice device) const
@@ -965,7 +1007,8 @@ private:
 		uint32_t presentModeCount;
 		vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface, &presentModeCount, nullptr);
 
-		if (presentModeCount != 0) {
+		if (presentModeCount != 0)
+		{
 			details.presentModes.resize(presentModeCount);
 			vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface, &presentModeCount, details.presentModes.data());
 		}
@@ -1020,8 +1063,7 @@ private:
 
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
-		// Not set to dynamic
-		/*VkViewport viewport{};
+		VkViewport viewport{};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
 		viewport.width = static_cast<float>(m_swapChainExtent.width);
@@ -1033,7 +1075,7 @@ private:
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
 		scissor.extent = m_swapChainExtent;
-		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);*/
+		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 		vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
@@ -1043,6 +1085,17 @@ private:
 		{
 			throw std::runtime_error("Failed to record command buffer!");
 		}
+	}
+
+	void RecreateSwapChain()
+	{
+		vkDeviceWaitIdle(m_device);
+
+		CleanupSwapChain();
+
+		CreateSwapChain();
+		CreateImageViews();
+		CreateFramebuffers();
 	}
 
 	void SetupDebugMessenger()
