@@ -1089,6 +1089,14 @@ private:
 
 	void RecreateSwapChain()
 	{
+		int width = 0, height = 0;
+		glfwGetFramebufferSize(m_window, &width, &height);
+		while (width == 0 || height == 0)
+		{
+			glfwGetFramebufferSize(m_window, &width, &height);
+			glfwWaitEvents();
+		}
+
 		vkDeviceWaitIdle(m_device);
 
 		CleanupSwapChain();
