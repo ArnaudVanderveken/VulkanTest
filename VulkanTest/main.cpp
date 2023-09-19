@@ -145,6 +145,8 @@ private:
 	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
 	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
 	};
+	VkBuffer m_vertexBuffer{};
+	VkDeviceMemory m_vertexBufferMemory{};
 
 
 	// CALLBACKS
@@ -267,6 +269,9 @@ private:
 	void Cleanup() const
 	{
 		CleanupSwapChain();
+
+		vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
+		vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
 
 		vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
@@ -812,6 +817,40 @@ private:
 		}
 	}
 
+	void CreateVertexBuffer()
+	{
+		VkBufferCreateInfo bufferInfo{};
+		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferInfo.size = sizeof(m_vertices[0]) * m_vertices.size();
+		bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		if (vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_vertexBuffer) != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create vertex buffer!");
+		}
+
+		VkMemoryRequirements memRequirements;
+		vkGetBufferMemoryRequirements(m_device, m_vertexBuffer, &memRequirements);
+
+		VkMemoryAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_vertexBufferMemory) != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to allocate vertex buffer memory!");
+		}
+
+		vkBindBufferMemory(m_device, m_vertexBuffer, m_vertexBufferMemory, 0);
+
+		void* data;
+		vkMapMemory(m_device, m_vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+		memcpy(data, m_vertices.data(), (size_t)bufferInfo.size);
+		vkUnmapMemory(m_device, m_vertexBufferMemory);
+	}
+
 	void DrawFrame()
 	{
 		vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
@@ -881,6 +920,22 @@ private:
 		m_currentFrame = (m_currentFrame + 1) % G_MAX_FRAMES_IN_FLIGHT;
 	}
 
+	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+	{
+		VkPhysicalDeviceMemoryProperties memProperties;
+		vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+
+		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+		{
+			if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+			{
+				return i;
+			}
+		}
+
+		throw std::runtime_error("Failed to find suitable memory type!");
+	}
+
 	QueueFamilyIndices FindQueueFamilies(const VkPhysicalDevice& device) const
 	{
 		QueueFamilyIndices indices{};
@@ -947,6 +1002,7 @@ private:
 		CreateGraphicsPipeline();
 		CreateFramebuffers();
 		CreateCommandPool();
+		CreateVertexBuffer();
 		CreateCommandBuffers();
 		CreateSyncObjects();
 	}
@@ -1098,7 +1154,7 @@ private:
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = m_swapChainExtent;
 
-		VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+		constexpr VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
 		renderPassInfo.clearValueCount = 1;
 		renderPassInfo.pClearValues = &clearColor;
 
@@ -1119,6 +1175,12 @@ private:
 		scissor.offset = { 0, 0 };
 		scissor.extent = m_swapChainExtent;
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+
+		const VkBuffer vertexBuffers[] = { m_vertexBuffer };
+		constexpr VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
 		vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
