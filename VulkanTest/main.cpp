@@ -1,9 +1,13 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+
+#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -102,6 +106,13 @@ struct Vertex
 	}
 };
 
+struct UniformBufferObject
+{
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
+
 class HelloTriangleApplication
 {
 public:
@@ -129,6 +140,7 @@ private:
 	VkExtent2D m_swapChainExtent{};
 	std::vector<VkImageView> m_swapChainImageViews{};
 	VkRenderPass m_renderPass{};
+	VkDescriptorSetLayout m_descriptorSetLayout{};
 	VkPipelineLayout m_pipelineLayout{};
 	VkPipeline m_graphicsPipeline{};
 	std::vector<VkFramebuffer> m_swapChainFramebuffers{};
@@ -154,6 +166,10 @@ private:
 	};
 	VkBuffer m_indexBuffer{};
 	VkDeviceMemory m_indexBufferMemory{};
+
+	std::vector<VkBuffer> m_uniformBuffers{};
+	std::vector<VkDeviceMemory> m_uniformBuffersMemory{};
+	std::vector<void*> m_uniformBuffersMapped{};
 
 
 	// CALLBACKS
@@ -282,6 +298,16 @@ private:
 
 		vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
 		vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+
+		for (size_t i = 0; i < G_MAX_FRAMES_IN_FLIGHT; ++i)
+		{
+			vkDestroyBuffer(m_device, m_uniformBuffers[i], nullptr);
+			vkFreeMemory(m_device, m_uniformBuffersMemory[i], nullptr);
+		}
+
+		vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
+
+		vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
 
 		vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
@@ -416,6 +442,26 @@ private:
 		if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS)
 		{
 			throw std::runtime_error("Failed to create command pool!");
+		}
+	}
+
+	void CreateDescriptorSetLayout()
+	{
+		VkDescriptorSetLayoutBinding uboLayoutBinding{};
+		uboLayoutBinding.binding = 0;
+		uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		uboLayoutBinding.descriptorCount = 1;
+		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+		VkDescriptorSetLayoutCreateInfo layoutInfo{};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = 1;
+		layoutInfo.pBindings = &uboLayoutBinding;
+
+		if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorSetLayout) != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create descriptor set layout!");
 		}
 	}
 
@@ -563,8 +609,8 @@ private:
 
 		VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 		pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutInfo.setLayoutCount = 0; // Optional
-		pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+		pipelineLayoutInfo.setLayoutCount = 1;
+		pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
 		pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 		pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -911,6 +957,22 @@ private:
 		}
 	}
 
+	void CreateUniformBuffers()
+	{
+		constexpr VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+		m_uniformBuffers.resize(G_MAX_FRAMES_IN_FLIGHT);
+		m_uniformBuffersMemory.resize(G_MAX_FRAMES_IN_FLIGHT);
+		m_uniformBuffersMapped.resize(G_MAX_FRAMES_IN_FLIGHT);
+
+		for (size_t i = 0; i < G_MAX_FRAMES_IN_FLIGHT; ++i)
+		{
+			CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_uniformBuffers[i], m_uniformBuffersMemory[i]);
+
+			vkMapMemory(m_device, m_uniformBuffersMemory[i], 0, bufferSize, 0, &m_uniformBuffersMapped[i]);
+		}
+	}
+
 	void CreateVertexBuffer()
 	{
 		const VkDeviceSize bufferSize = sizeof(m_vertices[0]) * m_vertices.size();
@@ -955,6 +1017,8 @@ private:
 		vkResetCommandBuffer(m_commandBuffers[m_currentFrame], 0);
 
 		RecordCommandBuffer(m_commandBuffers[m_currentFrame], imageIndex);
+
+		UpdateUniformBuffer(m_currentFrame);
 
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1080,6 +1144,7 @@ private:
 		CreateSwapChain();
 		CreateImageViews();
 		CreateRenderPass();
+		CreateDescriptorSetLayout();
 		CreateGraphicsPipeline();
 		CreateFramebuffers();
 		CreateCommandPool();
@@ -1307,6 +1372,22 @@ private:
 		{
 			throw std::runtime_error("Failed to set up Vulkan debug messenger!");
 		}
+	}
+
+	void UpdateUniformBuffer(uint32_t currentImage) const
+	{
+		static auto startTime = std::chrono::high_resolution_clock::now();
+
+		const auto currentTime = std::chrono::high_resolution_clock::now();
+		const float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+		UniformBufferObject ubo{};
+		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(m_swapChainExtent.width) / static_cast<float>(m_swapChainExtent.height), 0.1f, 10.0f);
+		ubo.proj[1][1] *= -1;
+
+		memcpy(m_uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 	}
 };
 
