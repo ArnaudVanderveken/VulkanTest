@@ -445,6 +445,11 @@ private:
 		}
 	}
 
+	void CreateDescriptorPool()
+	{
+
+	}
+
 	void CreateDescriptorSetLayout()
 	{
 		VkDescriptorSetLayoutBinding uboLayoutBinding{};
@@ -1150,6 +1155,8 @@ private:
 		CreateCommandPool();
 		CreateVertexBuffer();
 		CreateIndexBuffer();
+		CreateUniformBuffers();
+		CreateDescriptorPool();
 		CreateCommandBuffers();
 		CreateSyncObjects();
 	}
