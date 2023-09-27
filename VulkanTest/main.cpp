@@ -5,8 +5,12 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#pragma warning( push )
+#pragma warning( disable : 26451 )
+#pragma warning( disable : 4244 )
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#pragma warning( pop )
 
 #include <algorithm>
 #include <array>
@@ -1114,7 +1118,7 @@ private:
 	void CreateTextureImage()
 	{
 		int texWidth, texHeight, texChannels;
-		stbi_uc* pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+		stbi_uc* pixels = stbi_load("textures/Ubisoft-Logo.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 		const VkDeviceSize imageSize = texWidth * texHeight * 4;
 
 		if (!pixels) {
@@ -1620,7 +1624,7 @@ private:
 		}
 	}
 
-	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) const
+	void TransitionImageLayout(VkImage image, VkFormat /*format*/, VkImageLayout oldLayout, VkImageLayout newLayout) const
 	{
 		const VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
 
