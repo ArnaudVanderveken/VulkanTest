@@ -5,6 +5,11 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#pragma warning( push )
+#pragma warning( disable : 4201 )
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
+#pragma warning( pop )
 
 #pragma warning( push )
 #pragma warning( disable : 26451 )
@@ -12,6 +17,14 @@
 #pragma warning( disable : 6262 )
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#pragma warning( pop )
+
+#pragma warning( push )
+#pragma warning( disable : 26495 )
+#pragma warning( disable : 26451 )
+#pragma warning( disable : 26498 )
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
 #pragma warning( pop )
 
 #include <algorithm>
@@ -25,11 +38,16 @@
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 
 constexpr uint32_t G_WIDTH = 800;
 constexpr uint32_t G_HEIGHT = 600;
+
+const std::string G_MODEL_PATH = "models/viking_room.obj";
+const std::string G_TEXTURE_PATH = "textures/viking_room.png";
+
 const std::vector<const char*> G_VALIDATION_LAYERS = {
 	"VK_LAYER_KHRONOS_validation"
 };
@@ -120,6 +138,21 @@ struct Vertex
 
 		return attributeDescriptions;
 	}
+
+	bool operator==(const Vertex& other) const
+	{
+		return pos == other.pos && color == other.color && texCoord == other.texCoord;
+	}
+};
+
+template<> struct std::hash<Vertex>
+{
+	size_t operator()(Vertex const& vertex) const noexcept
+	{
+		return ((hash<glm::vec3>()(vertex.pos) ^
+			(hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+			(hash<glm::vec2>()(vertex.texCoord) << 1);
+	}
 };
 
 struct UniformBufferObject
@@ -177,22 +210,11 @@ private:
 	VkDeviceMemory m_depthImageMemory{};
 	VkImageView m_depthImageView{};
 
-	const std::vector<Vertex> m_vertices
-	{
-		{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-		{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-		{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-		{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-
-		{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-		{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-		{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-		{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
-	};
+	std::vector<Vertex> m_vertices{};
 	VkBuffer m_vertexBuffer{};
 	VkDeviceMemory m_vertexBufferMemory{};
 
-	const std::vector<uint16_t> m_indices{ 0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4 };
+	std::vector<uint32_t> m_indices{};
 	VkBuffer m_indexBuffer{};
 	VkDeviceMemory m_indexBufferMemory{};
 
@@ -1171,11 +1193,12 @@ private:
 	void CreateTextureImage()
 	{
 		int texWidth, texHeight, texChannels;
-		stbi_uc* pixels = stbi_load("textures/Ubisoft-Logo.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+		stbi_uc* pixels = stbi_load(G_TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 		const VkDeviceSize imageSize = texWidth * texHeight * 4;
 
-		if (!pixels) {
-			throw std::runtime_error("failed to load texture image!");
+		if (!pixels)
+		{
+			throw std::runtime_error("Failed to load texture image!");
 		}
 
 		VkBuffer stagingBuffer;
@@ -1479,6 +1502,7 @@ private:
 		CreateTextureImage();
 		CreateTextureImageView();
 		CreateTextureSampler();
+		LoadModel();
 		CreateVertexBuffer();
 		CreateIndexBuffer();
 		CreateUniformBuffers();
@@ -1522,6 +1546,50 @@ private:
 		vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
 
 		return indices.IsComplete() && swapChainAdequate && supportedFeatures.samplerAnisotropy;
+	}
+
+	void LoadModel()
+	{
+		tinyobj::attrib_t attrib;
+		std::vector<tinyobj::shape_t> shapes;
+		std::vector<tinyobj::material_t> materials;
+		std::string warn, err;
+
+		if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, G_MODEL_PATH.c_str()))
+		{
+			throw std::runtime_error(warn + err);
+		}
+
+		std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+
+		for (const auto& shape : shapes)
+		{
+			for (const auto& index : shape.mesh.indices)
+			{
+				Vertex vertex{};
+
+				vertex.pos = {
+					attrib.vertices[3 * index.vertex_index + 0],
+					attrib.vertices[3 * index.vertex_index + 1],
+					attrib.vertices[3 * index.vertex_index + 2]
+				};
+
+				vertex.texCoord = {
+					attrib.texcoords[2 * index.texcoord_index + 0],
+					1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+				};
+
+				vertex.color = { 1.0f, 1.0f, 1.0f };
+
+				if (!uniqueVertices.contains(vertex))
+				{
+					uniqueVertices[vertex] = static_cast<uint32_t>(m_vertices.size());
+					m_vertices.push_back(vertex);
+				}
+
+				m_indices.push_back(uniqueVertices[vertex]);
+			}
+		}
 	}
 
 	void MainLoop()
@@ -1669,7 +1737,7 @@ private:
 		constexpr VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-		vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+		vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[m_currentFrame], 0, nullptr);
 
