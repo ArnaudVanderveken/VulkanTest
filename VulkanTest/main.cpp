@@ -42,8 +42,8 @@
 #include <vector>
 
 
-constexpr uint32_t G_WIDTH = 800;
-constexpr uint32_t G_HEIGHT = 600;
+constexpr uint32_t G_WIDTH = 1280;
+constexpr uint32_t G_HEIGHT = 720;
 
 const std::string G_MODEL_PATH = "models/viking_room.obj";
 const std::string G_TEXTURE_PATH = "textures/viking_room.png";
