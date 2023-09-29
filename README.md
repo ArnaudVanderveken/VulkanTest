@@ -3,7 +3,7 @@ This project was my first time working with Vulkan. I implemented the tutorial a
 
 All credits to the website vulkan-tutorial.com for their code and the resources they used.
 
-More deatails about this project can be found on my personal website: www.arnaudvanderveken.com
+More deatails about this project can be found on my personal website: www.arnaudvanderveken.com/projects/vulkan-renderer
 
 ## Installation
 Make sure to use Visual Studio 2022.
