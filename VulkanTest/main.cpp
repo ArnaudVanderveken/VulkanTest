@@ -157,9 +157,9 @@ template<> struct std::hash<Vertex>
 
 struct UniformBufferObject
 {
-	alignas(16) glm::mat4 model;
-	alignas(16) glm::mat4 view;
-	alignas(16) glm::mat4 proj;
+	alignas(16) glm::mat4 m_Model;
+	alignas(16) glm::mat4 m_View;
+	alignas(16) glm::mat4 m_Proj;
 };
 
 class HelloTriangleApplication
@@ -2010,10 +2010,10 @@ private:
 		const float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 		UniformBufferObject ubo{};
-		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.view = glm::lookAt(glm::vec3(2.0f, 3.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(m_SwapChainExtent.width) / static_cast<float>(m_SwapChainExtent.height), 0.1f, 10.0f);
-		ubo.proj[1][1] *= -1;
+		ubo.m_Model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.m_View = glm::lookAt(glm::vec3(2.0f, 3.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.m_Proj = glm::perspective(glm::radians(45.0f), static_cast<float>(m_SwapChainExtent.width) / static_cast<float>(m_SwapChainExtent.height), 0.1f, 10.0f);
+		ubo.m_Proj[1][1] *= -1;
 
 		memcpy(m_UniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 	}
