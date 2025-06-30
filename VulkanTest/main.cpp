@@ -42,11 +42,15 @@
 #include <vector>
 
 
-constexpr uint32_t g_GWidth = 1280;
-constexpr uint32_t g_GHeight = 720;
+constexpr uint32_t g_GWidth = 1920;
+constexpr uint32_t g_GHeight = 1080;
 
 const std::string g_GModelPath = "models/GAP_2DAE01_Deveux_Yannick_Lowpoly.obj";
-const std::string g_GTexturePath = "textures/GAP_2DAE01_Deveux_Yannick_BC_Camera.png";
+const std::string g_GTextureAlbedoPath = "textures/GAP_2DAE01_Deveux_Yannick_BC_Camera.png";
+const std::string g_GTextureNormalPath = "textures/GAP_2DAE01_Deveux_Yannick_N_Camera.png";
+const std::string g_GTextureAOPath = "textures/GAP_2DAE01_Deveux_Yannick_AO_Camera.png";
+const std::string g_GTextureMetallicPath = "textures/GAP_2DAE01_Deveux_Yannick_MT_Camera.png";
+const std::string g_GTextureRoughnessPath = "textures/GAP_2DAE01_Deveux_Yannick_R_Camera.png";
 
 const std::vector<const char*> G_VALIDATION_LAYERS = {
 	"VK_LAYER_KHRONOS_validation"
@@ -203,9 +207,9 @@ private:
 	VkDescriptorPool m_DescriptorPool{};
 	std::vector<VkDescriptorSet> m_DescriptorSets{};
 	uint32_t m_MipLevels{};
-	VkImage m_TextureImage{};
-	VkDeviceMemory m_TextureImageMemory{};
-	VkImageView m_TextureImageView{};
+	std::vector<VkImage> m_TextureImages{};
+	std::vector<VkDeviceMemory> m_TextureImagesMemory{};
+	std::vector<VkImageView> m_TextureImageViews{};
 	VkSampler m_TextureSampler{};
 	VkImage m_DepthImage{};
 	VkDeviceMemory m_DepthImageMemory{};
@@ -370,10 +374,12 @@ private:
 		CleanupSwapChain();
 
 		vkDestroySampler(m_Device, m_TextureSampler, nullptr);
-		vkDestroyImageView(m_Device, m_TextureImageView, nullptr);
-
-		vkDestroyImage(m_Device, m_TextureImage, nullptr);
-		vkFreeMemory(m_Device, m_TextureImageMemory, nullptr);
+		for (size_t i{}; i < m_TextureImages.size(); ++i)
+		{
+			vkDestroyImageView(m_Device, m_TextureImageViews[i], nullptr);
+			vkDestroyImage(m_Device, m_TextureImages[i], nullptr);
+			vkFreeMemory(m_Device, m_TextureImagesMemory[i], nullptr);
+		}
 
 		vkDestroyBuffer(m_Device, m_IndexBuffer, nullptr);
 		vkFreeMemory(m_Device, m_IndexBufferMemory, nullptr);
@@ -556,7 +562,7 @@ private:
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		poolSizes[0].descriptorCount = static_cast<uint32_t>(g_GMaxFramesInFlight);
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		poolSizes[1].descriptorCount = static_cast<uint32_t>(g_GMaxFramesInFlight);
+		poolSizes[1].descriptorCount = static_cast<uint32_t>(g_GMaxFramesInFlight) * 5;
 
 		VkDescriptorPoolCreateInfo poolInfo{};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -579,14 +585,14 @@ private:
 		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
 
-		VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-		samplerLayoutBinding.binding = 1;
-		samplerLayoutBinding.descriptorCount = 1;
-		samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		samplerLayoutBinding.pImmutableSamplers = nullptr;
-		samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		VkDescriptorSetLayoutBinding texturesLayoutBinding{};
+		texturesLayoutBinding.binding = 1;
+		texturesLayoutBinding.descriptorCount = 5;
+		texturesLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		texturesLayoutBinding.pImmutableSamplers = nullptr;
+		texturesLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		const std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+		const std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, texturesLayoutBinding };
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -620,10 +626,26 @@ private:
 			bufferInfo.offset = 0;
 			bufferInfo.range = sizeof(UniformBufferObject);
 
-			VkDescriptorImageInfo imageInfo{};
-			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = m_TextureImageView;
-			imageInfo.sampler = m_TextureSampler;
+			std::array<VkDescriptorImageInfo, 5> imageInfo{};
+			imageInfo[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo[0].imageView = m_TextureImageViews[0];
+			imageInfo[0].sampler = m_TextureSampler;
+
+			imageInfo[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo[1].imageView = m_TextureImageViews[1];
+			imageInfo[1].sampler = m_TextureSampler;
+
+			imageInfo[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo[2].imageView = m_TextureImageViews[2];
+			imageInfo[2].sampler = m_TextureSampler;
+
+			imageInfo[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo[3].imageView = m_TextureImageViews[3];
+			imageInfo[3].sampler = m_TextureSampler;
+
+			imageInfo[4].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo[4].imageView = m_TextureImageViews[4];
+			imageInfo[4].sampler = m_TextureSampler;
 
 			std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 
@@ -640,8 +662,8 @@ private:
 			descriptorWrites[1].dstBinding = 1;
 			descriptorWrites[1].dstArrayElement = 0;
 			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[1].descriptorCount = 1;
-			descriptorWrites[1].pImageInfo = &imageInfo;
+			descriptorWrites[1].descriptorCount = 5;
+			descriptorWrites[1].pImageInfo = imageInfo.data();
 
 			vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 		}
@@ -1223,10 +1245,10 @@ private:
 		}
 	}
 
-	void CreateTextureImage()
+	void CreateTextureImage(VkImage& dstImage, VkDeviceMemory& dstMemory, VkFormat format, const std::string& path)
 	{
 		int texWidth, texHeight, texChannels;
-		stbi_uc* pixels = stbi_load(g_GTexturePath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+		stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
 		if (!pixels)
 		{
@@ -1247,21 +1269,20 @@ private:
 
 		stbi_image_free(pixels);
 
-		CreateImage(texWidth, texHeight, m_MipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_TextureImage, m_TextureImageMemory);
+		CreateImage(texWidth, texHeight, m_MipLevels, VK_SAMPLE_COUNT_1_BIT, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, dstImage, dstMemory);
 
-		TransitionImageLayout(m_TextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_MipLevels);
-		CopyBufferToImage(stagingBuffer, m_TextureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-		//TransitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_mipLevels);
+		TransitionImageLayout(dstImage, format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_MipLevels);
+		CopyBufferToImage(stagingBuffer, dstImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
 
 		vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
 		vkFreeMemory(m_Device, stagingBufferMemory, nullptr);
 
-		GenerateMipmaps(m_TextureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, m_MipLevels);
+		GenerateMipmaps(dstImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, m_MipLevels);
 	}
 
-	void CreateTextureImageView()
+	void CreateTextureImageView(VkImage dstImage, VkImageView& dstImageView, VkFormat format) const
 	{
-		m_TextureImageView = CreateImageView(m_TextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_MipLevels);
+		dstImageView = CreateImageView(dstImage, format, VK_IMAGE_ASPECT_COLOR_BIT, m_MipLevels);
 	}
 
 	void CreateTextureSampler()
@@ -1646,8 +1667,19 @@ private:
 		CreateColorResources();
 		CreateDepthResources();
 		CreateFramebuffers();
-		CreateTextureImage();
-		CreateTextureImageView();
+		m_TextureImages.resize(5);
+		m_TextureImagesMemory.resize(5);
+		m_TextureImageViews.resize(5);
+		CreateTextureImage(m_TextureImages[0], m_TextureImagesMemory[0], VK_FORMAT_R8G8B8A8_SRGB, g_GTextureAlbedoPath);
+		CreateTextureImage(m_TextureImages[1], m_TextureImagesMemory[1], VK_FORMAT_R8G8B8A8_UNORM, g_GTextureNormalPath);
+		CreateTextureImage(m_TextureImages[2], m_TextureImagesMemory[2], VK_FORMAT_R8G8B8A8_UNORM, g_GTextureAOPath);
+		CreateTextureImage(m_TextureImages[3], m_TextureImagesMemory[3], VK_FORMAT_R8G8B8A8_UNORM, g_GTextureMetallicPath);
+		CreateTextureImage(m_TextureImages[4], m_TextureImagesMemory[4], VK_FORMAT_R8G8B8A8_UNORM, g_GTextureRoughnessPath);
+		CreateTextureImageView(m_TextureImages[0], m_TextureImageViews[0], VK_FORMAT_R8G8B8A8_SRGB);
+		CreateTextureImageView(m_TextureImages[1], m_TextureImageViews[1], VK_FORMAT_R8G8B8A8_UNORM);
+		CreateTextureImageView(m_TextureImages[2], m_TextureImageViews[2], VK_FORMAT_R8G8B8A8_UNORM);
+		CreateTextureImageView(m_TextureImages[3], m_TextureImageViews[3], VK_FORMAT_R8G8B8A8_UNORM);
+		CreateTextureImageView(m_TextureImages[4], m_TextureImageViews[4], VK_FORMAT_R8G8B8A8_UNORM);
 		CreateTextureSampler();
 		LoadModel();
 		CreateVertexBuffer();
